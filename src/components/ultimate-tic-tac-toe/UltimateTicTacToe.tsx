@@ -1,16 +1,18 @@
 /** biome-ignore-all lint/a11y/useAriaPropsSupportedByRole: <explanation> */
 "use client";
 
-import { useMemo, useState } from "react";
-import type {
-  MiniBoardState,
-  Player,
-  UltimateState,
-} from "./ultimateTicTacToeLogic";
+import { AnimatePresence, motion } from "framer-motion";
+import { useEffect, useMemo, useState } from "react";
 import {
   applyMove,
+  clearUltimateState,
   createInitialUltimateState,
   getAllowedBoards,
+  loadUltimateState,
+  type MiniBoardState,
+  type Player,
+  saveUltimateState,
+  type UltimateState,
 } from "./ultimateTicTacToeLogic";
 
 const POSITIONS: number[] = [0, 1, 2, 3, 4, 5, 6, 7, 8];
@@ -20,6 +22,31 @@ export default function UltimateTicTacToe() {
     createInitialUltimateState(),
   );
   const [hover, setHover] = useState<{ b: number; c: number } | null>(null);
+  const [hydrated, setHydrated] = useState(false);
+  const [confirmOpen, setConfirmOpen] = useState(false);
+
+  // Fechar modal com ESC
+  useEffect(() => {
+    if (!confirmOpen) return;
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setConfirmOpen(false);
+    };
+    document.addEventListener("keydown", onKeyDown);
+    return () => document.removeEventListener("keydown", onKeyDown);
+  }, [confirmOpen]);
+
+  // Hydrate from localStorage on mount
+  useEffect(() => {
+    const loaded = loadUltimateState();
+    if (loaded) setState(loaded);
+    setHydrated(true);
+  }, []);
+
+  // Persist state after hydration
+  useEffect(() => {
+    if (!hydrated) return;
+    saveUltimateState(state);
+  }, [state, hydrated]);
 
   const allowedBoards = useMemo(() => getAllowedBoards(state), [state]);
 
@@ -33,6 +60,7 @@ export default function UltimateTicTacToe() {
   function onReset() {
     setState(createInitialUltimateState());
     setHover(null);
+    clearUltimateState();
   }
 
   const statusText =
@@ -97,20 +125,37 @@ export default function UltimateTicTacToe() {
             >
               <div className="relative">
                 {/* overlay de vitória/empate do mini-tabuleiro */}
-                {completed ? (
-                  <div className="absolute inset-0 z-10 flex items-center justify-center rounded-md bg-white/80 dark:bg-neutral-900/80">
-                    <span
-                      className={[
-                        "text-[9rem] opacity-[0.5] font-extrabold",
-                        isWonX ? "text-emerald-600" : "",
-                        isWonO ? "text-sky-600" : "",
-                        isDraw ? "text-neutral-500" : "",
-                      ].join(" ")}
+                <AnimatePresence>
+                  {completed ? (
+                    <motion.div
+                      key={`overlay-${mb}`}
+                      className="absolute inset-0 z-10 flex items-center justify-center rounded-md bg-white/80 dark:bg-neutral-900/80"
+                      initial={{ opacity: 0 }}
+                      animate={{ opacity: 1 }}
+                      exit={{ opacity: 0 }}
+                      transition={{ duration: 0.2 }}
                     >
-                      {isWonX ? "X" : isWonO ? "O" : "–"}
-                    </span>
-                  </div>
-                ) : null}
+                      <motion.span
+                        className={[
+                          "text-[9rem] opacity-[0.5] font-extrabold",
+                          isWonX ? "text-emerald-600" : "",
+                          isWonO ? "text-sky-600" : "",
+                          isDraw ? "text-neutral-500" : "",
+                        ].join(" ")}
+                        initial={{ scale: 0.8, rotate: -10, opacity: 0 }}
+                        animate={{ scale: 1, rotate: 0, opacity: 0.5 }}
+                        exit={{ scale: 0.9, opacity: 0 }}
+                        transition={{
+                          type: "spring",
+                          stiffness: 350,
+                          damping: 22,
+                        }}
+                      >
+                        {isWonX ? "X" : isWonO ? "O" : "–"}
+                      </motion.span>
+                    </motion.div>
+                  ) : null}
+                </AnimatePresence>
 
                 {/* grid 3x3 do mini-tabuleiro */}
                 <div className="grid grid-cols-3 gap-1">
@@ -157,17 +202,48 @@ export default function UltimateTicTacToe() {
                           !disabled && cell === null ? "cursor-pointer" : "",
                         ].join(" ")}
                       >
-                        <span
-                          className={[
-                            display === "X" ? "text-emerald-600" : "",
-                            display === "O" ? "text-sky-600" : "",
-                            isGhost ? "opacity-40" : "",
-                          ]
-                            .join(" ")
-                            .trim()}
-                        >
-                          {display}
-                        </span>
+                        <AnimatePresence initial={false} mode="popLayout">
+                          {cell ? (
+                            <motion.span
+                              key={`perm-${mb}-${ci}-${cell}`}
+                              className={[
+                                cell === "X" ? "text-emerald-600" : "",
+                                cell === "O" ? "text-sky-600" : "",
+                                "will-change-transform",
+                              ]
+                                .join(" ")
+                                .trim()}
+                              initial={{ scale: 0, rotate: -90, opacity: 0 }}
+                              animate={{ scale: 1, rotate: 0, opacity: 1 }}
+                              exit={{ scale: 0.9, opacity: 0 }}
+                              transition={{
+                                type: "spring",
+                                stiffness: 600,
+                                damping: 28,
+                              }}
+                            >
+                              {cell}
+                            </motion.span>
+                          ) : isGhost ? (
+                            <motion.span
+                              key={`ghost-${mb}-${ci}-${currentPlayer}`}
+                              className={[
+                                currentPlayer === "X"
+                                  ? "text-emerald-600"
+                                  : "text-sky-600",
+                                "opacity-40",
+                              ]
+                                .join(" ")
+                                .trim()}
+                              initial={{ opacity: 0, scale: 0.95 }}
+                              animate={{ opacity: 0.4, scale: 1 }}
+                              exit={{ opacity: 0, scale: 0.98 }}
+                              transition={{ duration: 0.15 }}
+                            >
+                              {currentPlayer}
+                            </motion.span>
+                          ) : null}
+                        </AnimatePresence>
                       </button>
                     );
                   })}
@@ -181,12 +257,55 @@ export default function UltimateTicTacToe() {
       <div className="flex gap-2">
         <button
           type="button"
-          onClick={onReset}
-          className="rounded-md px-3 py-2 text-sm font-medium border border-neutral-300 dark:border-neutral-700 hover:bg-neutral-50 dark:hover:bg-neutral-800"
+          onClick={() => setConfirmOpen(true)}
+          className="rounded-md px-3 py-2 text-sm font-medium border cursor-pointer border-neutral-300 dark:border-neutral-700 hover:bg-neutral-50 dark:hover:bg-neutral-800"
         >
           Reiniciar
         </button>
       </div>
+
+      {confirmOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center">
+          <div
+            className="absolute inset-0 bg-black/50"
+            onClick={() => setConfirmOpen(false)}
+            aria-hidden="true"
+          />
+          <div
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="reset-dialog-title"
+            className="relative z-10 w-full max-w-sm rounded-lg border border-neutral-300 dark:border-neutral-700 bg-white dark:bg-neutral-900 shadow-lg p-4"
+          >
+            <h3 id="reset-dialog-title" className="text-lg font-semibold mb-2">
+              Reiniciar jogo?
+            </h3>
+            <p className="text-sm text-neutral-600 dark:text-neutral-300 mb-4">
+              Isso apagará o progresso atual.
+            </p>
+            <div className="flex justify-end gap-2">
+              <button
+                type="button"
+                // autoFocus
+                onClick={() => setConfirmOpen(false)}
+                className="rounded-md px-3 py-2 text-sm border cursor-pointer border-neutral-300 dark:border-neutral-700 hover:bg-neutral-50 dark:hover:bg-neutral-800"
+              >
+                Cancelar
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  onReset();
+                  setConfirmOpen(false);
+                }}
+                className="rounded-md px-3 py-2 text-sm bg-emerald-600 text-white hover:bg-emerald-700 cursor-pointer"
+              >
+                Reiniciar
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
