@@ -39,7 +39,11 @@ export default function TicTacToe() {
     setCurrentPlayer("X");
   }
 
-  const status = winnerInfo ? `Winner: ${winnerInfo.winner}` : "It's a draw!";
+  const status = winnerInfo
+    ? `Winner: ${winnerInfo.winner}`
+    : draw
+      ? "It's a draw!"
+      : "";
 
   return (
     <div className="flex flex-col items-center gap-4">
@@ -58,15 +62,12 @@ export default function TicTacToe() {
           const display = cell ?? (isGhost ? currentPlayer : "");
 
           return (
-            <div
+            <button
+              // biome-ignore lint/suspicious/noArrayIndexKey: <explanation>
               key={idx}
-              role="button"
-              tabIndex={0}
+              type="button"
               aria-label={`Cell ${idx + 1}, ${cell ?? "empty"}`}
               onClick={() => handleCellClick(idx)}
-              onKeyDown={(e) => {
-                if (e.key === "Enter" || e.key === " ") handleCellClick(idx);
-              }}
               onMouseEnter={() => setHoveredIndex(idx)}
               onMouseLeave={() => {
                 if (hoveredIndex === idx) setHoveredIndex(null);
@@ -94,7 +95,7 @@ export default function TicTacToe() {
               >
                 {display}
               </span>
-            </div>
+            </button>
           );
         })}
       </div>
