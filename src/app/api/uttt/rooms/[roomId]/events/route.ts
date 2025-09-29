@@ -1,18 +1,20 @@
-import { NextRequest } from "next/server";
+import type { NextRequest } from "next/server";
+import type { UltimateState } from "@/components/ultimate-tic-tac-toe/ultimateTicTacToeLogic";
 import {
   attachSubscriber,
   broadcast,
-  getOrCreateRoom,
   joinRoom,
   leaveRoom,
   type ServerEvent,
 } from "@/lib/realtime/utttRooms";
-import { type UltimateState } from "@/components/ultimate-tic-tac-toe/ultimateTicTacToeLogic";
 
 export const runtime = "edge";
 
-export async function GET(req: NextRequest, ctx: { params: { roomId: string } }) {
-  const { roomId } = ctx.params;
+export async function GET(
+  req: NextRequest,
+  ctx: { params: Promise<{ roomId: string }> },
+) {
+  const { roomId } = await ctx.params;
   const { searchParams } = new URL(req.url);
   const clientId = searchParams.get("clientId") || crypto.randomUUID();
   const name = searchParams.get("name") || "Convidado";
@@ -21,7 +23,8 @@ export async function GET(req: NextRequest, ctx: { params: { roomId: string } })
   const stream = new ReadableStream({
     start(controller) {
       const encoder = new TextEncoder();
-      const enqueue = (line: string) => controller.enqueue(encoder.encode(line));
+      const enqueue = (line: string) =>
+        controller.enqueue(encoder.encode(line));
       const close = () => controller.close();
 
       attachSubscriber(room, clientId, { enqueue, close });
