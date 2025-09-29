@@ -193,14 +193,14 @@ export function handleMove(
       room.roles.set(clientId, "X");
       room.players.X = {
         id: clientId,
-        name: room.players.X?.name ?? "Convidado",
+        name: room.players?.X ?? "Convidado 1 (X)",
       };
       role = "X";
     } else if (!room.players.O) {
       room.roles.set(clientId, "O");
       room.players.O = {
         id: clientId,
-        name: room.players.O?.name ?? "Convidado",
+        name: room.players.O ?? "Convidado 2 (O)",
       };
       role = "O";
     }

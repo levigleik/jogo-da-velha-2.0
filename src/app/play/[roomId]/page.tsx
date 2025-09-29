@@ -4,7 +4,7 @@ import { AnimatePresence, motion } from "framer-motion";
 import Link from "next/link";
 import { useParams, useSearchParams } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
-import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { useQuery } from "@tanstack/react-query";
 import {
   getAllowedBoards,
   type MiniBoardState,
@@ -39,6 +39,7 @@ type ServerEvent =
   | { type: "error"; payload: { message: string } };
 
 const POSITIONS: number[] = [0, 1, 2, 3, 4, 5, 6, 7, 8];
+const INACTIVITY_LIMIT_MS = 40 * 60 * 1000;
 
 function getOrCreateClientId() {
   if (typeof window === "undefined") return "";
@@ -51,16 +52,37 @@ function getOrCreateClientId() {
   return id;
 }
 
+function formatDuration(ms: number): string {
+  const total = Math.max(0, Math.floor(ms / 1000));
+  const m = Math.floor(total / 60)
+    .toString()
+    .padStart(2, "0");
+  const s = Math.floor(total % 60)
+    .toString()
+    .padStart(2, "0");
+  return `${m}:${s}`;
+}
+
 export default function OnlineUTTTPage() {
   const params = useParams<{ roomId: string }>();
   const roomId = params.roomId;
   const search = useSearchParams();
-  const queryClient = useQueryClient();
 
   const [clientId] = useState<string>(() => getOrCreateClientId());
   const [name, setName] = useState<string>("");
   const [inputName, setInputName] = useState<string>("");
   const [hover, setHover] = useState<{ b: number; c: number } | null>(null);
+
+  // Track last interaction (resets countdown)
+  const [lastInteractionAt, setLastInteractionAt] = useState<number>(() =>
+    Date.now(),
+  );
+  const [nowTick, setNowTick] = useState<number>(() => Date.now());
+
+  useEffect(() => {
+    const id = setInterval(() => setNowTick(Date.now()), 1000);
+    return () => clearInterval(id);
+  }, []);
 
   // Pre-fill name from URL (?name=foo) or sessionStorage
   useEffect(() => {
@@ -110,7 +132,6 @@ export default function OnlineUTTTPage() {
       try {
         const url = `/api/uttt/rooms/${roomId}/events`;
         const body = JSON.stringify({ clientId, action: "leave" });
-        // Fire-and-forget; keepalive helps on unload
         fetch(url, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
@@ -146,7 +167,7 @@ export default function OnlineUTTTPage() {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ clientId, ...action }),
     });
-    // After action, immediately refresh snapshot
+    setLastInteractionAt(Date.now());
     await refetch();
   }
 
@@ -157,8 +178,7 @@ export default function OnlineUTTTPage() {
     if (typeof window !== "undefined") {
       window.sessionStorage.setItem("uttt-name", finalName);
     }
-    // Optionally notify server to update names for others quickly
-    postAction({ type: "join", name: finalName });
+    void postAction({ type: "join", name: finalName });
   }
 
   async function onCellClick(bi: number, ci: number) {
@@ -182,6 +202,9 @@ export default function OnlineUTTTPage() {
   }
 
   const connected = isSuccess && !isError;
+
+  const remainingMs = Math.max(0, INACTIVITY_LIMIT_MS - (nowTick - lastInteractionAt));
+  const countdownLabel = formatDuration(remainingMs);
 
   if (!state) {
     return (
@@ -255,6 +278,24 @@ export default function OnlineUTTTPage() {
           ← Início
         </Link>
       </div>
+
+      {/* Inactivity countdown banner */}
+      <div
+        className={[
+          "w-full max-w-4xl rounded-md px-3 py-2 text-sm",
+          "border",
+          remainingMs > 5 * 60 * 1000
+            ? "border-amber-300 bg-amber-50 dark:border-amber-700 dark:bg-amber-900/20"
+            : "border-red-300 bg-red-50 dark:border-red-700 dark:bg-red-900/20",
+          "text-neutral-800 dark:text-neutral-200",
+        ].join(" ")}
+        role="status"
+        aria-live="polite"
+      >
+        Inatividade: se não houver interação em até 40 minutos, a sala será fechada. Tempo restante:{" "}
+        <span className="font-mono font-semibold">{countdownLabel}</span>
+      </div>
+
       <div className="flex flex-col items-center gap-2">
         <h1 className="text-2xl font-bold">Jogo da Velha 2.0 — Online</h1>
         <div className="text-sm text-neutral-600 dark:text-neutral-300">
