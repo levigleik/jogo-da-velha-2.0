@@ -1,10 +1,10 @@
 "use client";
 
+import { useQuery } from "@tanstack/react-query";
 import { AnimatePresence, motion } from "framer-motion";
 import Link from "next/link";
 import { useParams, useSearchParams } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
-import { useQuery } from "@tanstack/react-query";
 import {
   getAllowedBoards,
   type MiniBoardState,
@@ -121,7 +121,11 @@ export default function OnlineUTTTPage() {
   const role: "X" | "O" | "spectator" = snapshot?.payload.role ?? "spectator";
   const state: UltimateState | null = snapshot?.payload.state ?? null;
   const players =
-    snapshot?.payload.players ?? ({} as { X?: { id: string; name: string }; O?: { id: string; name: string } });
+    snapshot?.payload.players ??
+    ({} as {
+      X?: { id: string; name: string };
+      O?: { id: string; name: string };
+    });
   const started = snapshot?.payload.started ?? false;
 
   // Leave room on unload/unmount
@@ -203,7 +207,10 @@ export default function OnlineUTTTPage() {
 
   const connected = isSuccess && !isError;
 
-  const remainingMs = Math.max(0, INACTIVITY_LIMIT_MS - (nowTick - lastInteractionAt));
+  const remainingMs = Math.max(
+    0,
+    INACTIVITY_LIMIT_MS - (nowTick - lastInteractionAt),
+  );
   const countdownLabel = formatDuration(remainingMs);
 
   if (!state) {
@@ -292,7 +299,8 @@ export default function OnlineUTTTPage() {
         role="status"
         aria-live="polite"
       >
-        Inatividade: se não houver interação em até 40 minutos, a sala será fechada. Tempo restante:{" "}
+        Inatividade: se não houver interação em até 40 minutos, a sala será
+        fechada. Tempo restante:{" "}
         <span className="font-mono font-semibold">{countdownLabel}</span>
       </div>
 
@@ -312,7 +320,7 @@ export default function OnlineUTTTPage() {
         </div>
       </div>
 
-      <div className="flex items-center gap-4">
+      <div className="flex items-center gap-4 sm:flex-row flex-col">
         <div className="rounded border px-3 py-2 border-neutral-300 dark:border-neutral-700">
           Você: <span className="font-semibold">{me}</span>{" "}
           {role !== "spectator" ? `(${role})` : "(espectador)"}
@@ -440,7 +448,7 @@ export default function OnlineUTTTPage() {
                         }}
                         className={[
                           "select-none flex items-center justify-center",
-                          "h-16 w-16 rounded-md border",
+                          "sm:h-16 sm:w-16 h-8 w-8 rounded-md border",
                           disabled
                             ? "border-neutral-300 dark:border-neutral-800"
                             : "border-neutral-300 dark:border-neutral-700 hover:bg-neutral-50 dark:hover:bg-neutral-800",
@@ -514,13 +522,6 @@ export default function OnlineUTTTPage() {
         >
           Reiniciar
         </button>
-        <span className="text-sm text-neutral-500">
-          {connected
-            ? isFetching
-              ? "Atualizando…"
-              : "Conectado"
-            : "Desconectado"}
-        </span>
       </div>
     </main>
   );
