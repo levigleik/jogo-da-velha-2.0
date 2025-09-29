@@ -3,7 +3,8 @@
 import { AnimatePresence, motion } from "framer-motion";
 import Link from "next/link";
 import { useParams, useSearchParams } from "next/navigation";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   getAllowedBoards,
   type MiniBoardState,
@@ -54,21 +55,12 @@ export default function OnlineUTTTPage() {
   const params = useParams<{ roomId: string }>();
   const roomId = params.roomId;
   const search = useSearchParams();
+  const queryClient = useQueryClient();
 
   const [clientId] = useState<string>(() => getOrCreateClientId());
   const [name, setName] = useState<string>("");
   const [inputName, setInputName] = useState<string>("");
-  const [connected, setConnected] = useState(false);
-
-  const [role, setRole] = useState<"X" | "O" | "spectator">("spectator");
-  const [state, setState] = useState<UltimateState | null>(null);
-  const [players, setPlayers] = useState<{
-    X?: { id: string; name: string };
-    O?: { id: string; name: string };
-  }>({});
-  const [started, setStarted] = useState(false);
   const [hover, setHover] = useState<{ b: number; c: number } | null>(null);
-  const esRef = useRef<EventSource | null>(null);
 
   // Pre-fill name from URL (?name=foo) or sessionStorage
   useEffect(() => {
@@ -82,6 +74,61 @@ export default function OnlineUTTTPage() {
     setName(saved || "");
   }, [search]);
 
+  // Polling snapshot every 2s when joined (name set)
+  const { data, isSuccess, isError, isFetching, refetch } = useQuery({
+    queryKey: ["uttt-snapshot", roomId, clientId, name || ""],
+    enabled: Boolean(roomId && clientId && name),
+    refetchInterval: 2000,
+    refetchOnWindowFocus: true,
+    queryFn: async (): Promise<ServerEvent> => {
+      const url = new URL(
+        `/api/uttt/rooms/${roomId}/events`,
+        window.location.origin,
+      );
+      url.searchParams.set("clientId", clientId);
+      url.searchParams.set("name", name || "Convidado");
+      const res = await fetch(url.toString(), { cache: "no-store" });
+      if (!res.ok) {
+        throw new Error("Falha ao buscar estado da sala");
+      }
+      return (await res.json()) as ServerEvent;
+    },
+  });
+
+  const snapshot = data && data.type === "snapshot" ? data : undefined;
+  const role: "X" | "O" | "spectator" = snapshot?.payload.role ?? "spectator";
+  const state: UltimateState | null = snapshot?.payload.state ?? null;
+  const players =
+    snapshot?.payload.players ?? ({} as { X?: { id: string; name: string }; O?: { id: string; name: string } });
+  const started = snapshot?.payload.started ?? false;
+
+  // Leave room on unload/unmount
+  useEffect(() => {
+    if (!roomId || !clientId) return;
+
+    const leave = () => {
+      try {
+        const url = `/api/uttt/rooms/${roomId}/events`;
+        const body = JSON.stringify({ clientId, action: "leave" });
+        // Fire-and-forget; keepalive helps on unload
+        fetch(url, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body,
+          keepalive: true,
+        }).catch(() => {});
+      } catch {
+        // ignore
+      }
+    };
+
+    window.addEventListener("beforeunload", leave);
+    return () => {
+      leave();
+      window.removeEventListener("beforeunload", leave);
+    };
+  }, [roomId, clientId]);
+
   const shareUrl =
     typeof window !== "undefined"
       ? window.location.origin + `/play/${roomId}`
@@ -93,67 +140,24 @@ export default function OnlineUTTTPage() {
     [state],
   );
 
-  const connect = useCallback(
-    (myName: string) => {
-      if (!roomId || !clientId) return;
-      // Close previous
-      esRef.current?.close();
-
-      // Open SSE with auto-join
-      const url = new URL(
-        `/api/uttt/rooms/${roomId}/events`,
-        window.location.origin,
-      );
-      url.searchParams.set("clientId", clientId);
-      url.searchParams.set("name", myName || "Convidado");
-      const es = new EventSource(url.toString());
-      esRef.current = es;
-
-      es.onopen = () => setConnected(true);
-      es.onerror = () => setConnected(false);
-      es.onmessage = (ev) => {
-        try {
-          const msg = JSON.parse(ev.data) as ServerEvent;
-          if (msg.type === "snapshot") {
-            setRole(msg.payload.role);
-            setPlayers(msg.payload.players);
-            setStarted(msg.payload.started);
-            setState(msg.payload.state);
-          } else if (msg.type === "players") {
-            setPlayers(msg.payload.players);
-            setStarted(msg.payload.started);
-          } else if (msg.type === "state") {
-            setState(msg.payload.state);
-          }
-        } catch {
-          // ignore bad message
-        }
-      };
-    },
-    [clientId, roomId],
-  );
-
-  useEffect(() => {
-    return () => {
-      esRef.current?.close();
-    };
-  }, []);
-
   async function postAction(action: any) {
     await fetch(`/api/uttt/rooms/${roomId}/action`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ clientId, ...action }),
     });
+    // After action, immediately refresh snapshot
+    await refetch();
   }
 
   function handleJoinSubmit(e: React.FormEvent) {
     e.preventDefault();
     const finalName = inputName.trim() || "Convidado";
     setName(finalName);
-    window.sessionStorage.setItem("uttt-name", finalName);
-    connect(finalName);
-    // also POST join to hurry players update
+    if (typeof window !== "undefined") {
+      window.sessionStorage.setItem("uttt-name", finalName);
+    }
+    // Optionally notify server to update names for others quickly
     postAction({ type: "join", name: finalName });
   }
 
@@ -171,9 +175,13 @@ export default function OnlineUTTTPage() {
   async function onSaveName() {
     const newName = inputName.trim() || "Convidado";
     setName(newName);
-    window.sessionStorage.setItem("uttt-name", newName);
+    if (typeof window !== "undefined") {
+      window.sessionStorage.setItem("uttt-name", newName);
+    }
     await postAction({ type: "setName", name: newName });
   }
+
+  const connected = isSuccess && !isError;
 
   if (!state) {
     return (
@@ -277,13 +285,6 @@ export default function OnlineUTTTPage() {
             onChange={(e) => setInputName(e.target.value)}
             className="border rounded-md px-2 py-1 bg-white dark:bg-neutral-900 border-neutral-300 dark:border-neutral-700"
           />
-          <button
-            type="button"
-            onClick={onSaveName}
-            className="rounded-md px-3 py-1 text-sm border border-neutral-300 dark:border-neutral-700 hover:bg-neutral-50 dark:hover:bg-neutral-800"
-          >
-            Salvar nome
-          </button>
         </div>
       </div>
 
@@ -378,7 +379,6 @@ export default function OnlineUTTTPage() {
                       (role !== "X" && role !== "O");
                     const isGhost =
                       !disabled && !cell && hover?.b === mb && hover?.c === ci;
-                    const display = cell ?? (isGhost ? role : "");
                     const isWinningCell = !!mini.winnerLine?.includes(ci);
 
                     return (
@@ -474,7 +474,11 @@ export default function OnlineUTTTPage() {
           Reiniciar
         </button>
         <span className="text-sm text-neutral-500">
-          {connected ? "Conectado" : "Desconectado"}
+          {connected
+            ? isFetching
+              ? "Atualizando…"
+              : "Conectado"
+            : "Desconectado"}
         </span>
       </div>
     </main>

@@ -1,5 +1,6 @@
 import "./globals.css";
 import { geistMono, geistSans } from "@/lib/fonts";
+import Providers from "@/components/Providers";
 
 export default function RootLayout({
   children,
@@ -11,7 +12,7 @@ export default function RootLayout({
       <body
         className={`${geistSans.variable} ${geistMono.variable} antialiased`}
       >
-        {children}
+        <Providers>{children}</Providers>
       </body>
     </html>
   );

@@ -1,14 +1,13 @@
 import type { NextRequest } from "next/server";
 import type { UltimateState } from "@/components/ultimate-tic-tac-toe/ultimateTicTacToeLogic";
 import {
-  attachSubscriber,
   broadcast,
   joinRoom,
   leaveRoom,
   type ServerEvent,
 } from "@/lib/realtime/utttRooms";
 
-export const runtime = "edge";
+export const runtime = "nodejs";
 
 export async function GET(
   req: NextRequest,
@@ -20,64 +19,66 @@ export async function GET(
   const name = searchParams.get("name") || "Convidado";
 
   const { room, role } = joinRoom(roomId, clientId, name);
-  const stream = new ReadableStream({
-    start(controller) {
-      const encoder = new TextEncoder();
-      const enqueue = (line: string) =>
-        controller.enqueue(encoder.encode(line));
-      const close = () => controller.close();
 
-      attachSubscriber(room, clientId, { enqueue, close });
-
-      // send initial snapshot
-      const snapshot: ServerEvent = {
-        type: "snapshot",
-        payload: {
-          state: room.state as UltimateState,
-          players: room.players,
-          role,
-          started: room.started,
-        },
-      };
-      enqueue(`data: ${JSON.stringify(snapshot)}\n\n`);
-
-      // keep alive
-      const interval = setInterval(() => {
-        try {
-          enqueue(`: keep-alive\n\n`);
-        } catch {
-          // ignore
-        }
-      }, 15000);
-
-      const onAbort = () => {
-        clearInterval(interval);
-        leaveRoom(roomId, clientId);
-        // notify others about players change
-        broadcast(room, {
-          type: "players",
-          payload: { players: room.players, started: room.started },
-        });
-        try {
-          controller.close();
-        } catch {
-          // ignore
-        }
-      };
-
-      req.signal.addEventListener("abort", onAbort);
+  const snapshot: ServerEvent = {
+    type: "snapshot",
+    payload: {
+      state: room.state as UltimateState,
+      players: room.players,
+      role,
+      started: room.started,
     },
-    cancel() {
-      // handled by abort
+  };
+
+  return new Response(JSON.stringify(snapshot), {
+    headers: {
+      "Content-Type": "application/json; charset=utf-8",
+      "Cache-Control": "no-store",
     },
   });
+}
 
-  return new Response(stream, {
+export async function POST(
+  req: NextRequest,
+  ctx: { params: Promise<{ roomId: string }> },
+) {
+  const { roomId } = await ctx.params;
+  const body = await req.json().catch(() => ({}) as any);
+  const clientId = (body && body.clientId) || crypto.randomUUID();
+  const name = (body && body.name) || "Convidado";
+  const action = (body && body.action) as string | undefined;
+
+  const { room, role } = joinRoom(roomId, clientId, name);
+
+  if (action === "leave") {
+    leaveRoom(roomId, clientId);
+    // notify others; clients will pick it up on their next poll
+    broadcast(room, {
+      type: "players",
+      payload: { players: room.players, started: room.started },
+    });
+    return new Response(JSON.stringify({ ok: true }), {
+      headers: {
+        "Content-Type": "application/json; charset=utf-8",
+        "Cache-Control": "no-store",
+      },
+    });
+  }
+
+  const snapshot: ServerEvent = {
+    type: "snapshot",
+    payload: {
+      state: room.state as UltimateState,
+      players: room.players,
+      role,
+      started: room.started,
+    },
+  };
+
+  return new Response(JSON.stringify(snapshot), {
     headers: {
-      "Content-Type": "text/event-stream; charset=utf-8",
-      "Cache-Control": "no-cache, no-transform",
-      Connection: "keep-alive",
-      "X-Accel-Buffering": "no",
+      "Content-Type": "application/json; charset=utf-8",
+      "Cache-Control": "no-store",
     },
   });
 }

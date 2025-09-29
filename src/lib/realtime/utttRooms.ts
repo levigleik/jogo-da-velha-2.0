@@ -24,6 +24,8 @@ export interface Room {
       close: () => void;
     }
   >;
+  // Last heartbeat by clientId (used to clean up stale seats on polling)
+  lastSeen: Map<string, number>;
   started: boolean;
 }
 
@@ -35,6 +37,8 @@ declare global {
 const ROOMS: Map<string, Room> = globalThis.__UTTT_ROOMS__ ?? new Map();
 globalThis.__UTTT_ROOMS__ = ROOMS;
 
+const STALE_TTL_MS = 10_000;
+
 export function getOrCreateRoom(roomId: string): Room {
   let room = ROOMS.get(roomId);
   if (!room) {
@@ -44,11 +48,33 @@ export function getOrCreateRoom(roomId: string): Room {
       players: {},
       roles: new Map(),
       subs: new Map(),
+      lastSeen: new Map(),
       started: false,
     };
     ROOMS.set(roomId, room);
   }
   return room;
+}
+
+function cleanupStale(room: Room, now = Date.now()) {
+  for (const [clientId, ts] of room.lastSeen) {
+    if (now - ts > STALE_TTL_MS) {
+      room.lastSeen.delete(clientId);
+      const role = room.roles.get(clientId);
+      room.roles.delete(clientId);
+      room.subs.delete(clientId);
+      if (role === "X" && room.players.X?.id === clientId) {
+        delete room.players.X;
+      } else if (role === "O" && room.players.O?.id === clientId) {
+        delete room.players.O;
+      }
+    }
+  }
+  room.started = Boolean(room.players.X && room.players.O);
+}
+
+function markSeen(room: Room, clientId: string) {
+  room.lastSeen.set(clientId, Date.now());
 }
 
 function assignRole(room: Room, clientId: string): "X" | "O" | "spectator" {
@@ -72,6 +98,10 @@ export function joinRoom(
   name: string,
 ): { room: Room; role: "X" | "O" | "spectator" } {
   const room = getOrCreateRoom(roomId);
+
+  // Remove stale occupants before assigning
+  cleanupStale(room);
+
   const role = assignRole(room, clientId);
 
   if (role === "X") {
@@ -79,6 +109,7 @@ export function joinRoom(
   } else if (role === "O") {
     room.players.O = { id: clientId, name };
   }
+  markSeen(room, clientId);
   room.started = Boolean(room.players.X && room.players.O);
   return { room, role };
 }
@@ -88,6 +119,7 @@ export function leaveRoom(roomId: string, clientId: string) {
   const role = room.roles.get(clientId);
   room.roles.delete(clientId);
   room.subs.delete(clientId);
+  room.lastSeen.delete(clientId);
   if (role === "X" && room.players.X?.id === clientId) {
     delete room.players.X;
   } else if (role === "O" && room.players.O?.id === clientId) {
@@ -100,6 +132,8 @@ export function setName(room: Room, clientId: string, name: string) {
   const role = room.roles.get(clientId);
   if (role === "X" && room.players.X) room.players.X.name = name;
   if (role === "O" && room.players.O) room.players.O.name = name;
+  // touch lastSeen to keep seat while updating the name
+  if (role) markSeen(room, clientId);
 }
 
 export function resetRoom(room: Room) {
@@ -118,7 +152,10 @@ export type ServerEvent =
     }
   | {
       type: "players";
-      payload: { players: { X?: PlayerInfo; O?: PlayerInfo }; started: boolean };
+      payload: {
+        players: { X?: PlayerInfo; O?: PlayerInfo };
+        started: boolean;
+      };
     }
   | { type: "state"; payload: { state: UltimateState } }
   | { type: "error"; payload: { message: string } };
@@ -148,10 +185,32 @@ export function handleMove(
   boardIndex: number,
   cellIndex: number,
 ): { ok: true } | { ok: false; message: string } {
-  const role = room.roles.get(clientId);
+  let role = room.roles.get(clientId);
+
+  // If the client is not yet a player, auto-claim an available seat
+  if (role !== "X" && role !== "O") {
+    if (!room.players.X) {
+      room.roles.set(clientId, "X");
+      room.players.X = {
+        id: clientId,
+        name: room.players.X?.name ?? "Convidado",
+      };
+      role = "X";
+    } else if (!room.players.O) {
+      room.roles.set(clientId, "O");
+      room.players.O = {
+        id: clientId,
+        name: room.players.O?.name ?? "Convidado",
+      };
+      role = "O";
+    }
+    room.started = Boolean(room.players.X && room.players.O);
+  }
+
   if (role !== "X" && role !== "O") {
     return { ok: false, message: "Somente jogadores podem jogar." };
   }
+
   const expected: Player = room.state.nextPlayer;
   if (role !== expected) {
     return { ok: false, message: "Não é a sua vez." };

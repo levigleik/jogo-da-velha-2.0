@@ -8,7 +8,7 @@ import {
   setName as setPlayerName,
 } from "@/lib/realtime/utttRooms";
 
-export const runtime = "edge";
+export const runtime = "nodejs";
 
 export async function POST(
   req: NextRequest,
@@ -57,6 +57,13 @@ export async function POST(
         boardIndex: number;
         cellIndex: number;
       };
+
+      // Ensure this client is part of the room (auto-join if needed)
+      if (!room.roles.get(clientId)) {
+        const assumedName = (body?.name as string) || "Convidado";
+        joinRoom(roomId, clientId, assumedName);
+      }
+
       const res = handleMove(room, clientId, boardIndex, cellIndex);
       if (!res.ok) {
         return NextResponse.json(
