@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useCallback } from "react";
+import Rules from "@/components/Rules";
 
 export default function HomeActions() {
   const router = useRouter();
@@ -16,7 +17,7 @@ export default function HomeActions() {
   }, [router]);
 
   return (
-    <section className="w-full max-w-3xl">
+    <section className="w-full max-w-3xl grid gap-6">
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         <div className="text-center rounded-xl border border-neutral-300 dark:border-neutral-700 p-5 bg-white dark:bg-neutral-900">
           <h2 className="text-lg font-semibold mb-2">Partida local</h2>
@@ -46,6 +47,7 @@ export default function HomeActions() {
           </button>
         </div>
       </div>
+      <Rules />
     </section>
   );
 }

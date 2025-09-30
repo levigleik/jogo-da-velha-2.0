@@ -1,4 +1,4 @@
-import "./globals.css";
+import "../assets/styles/globals.css";
 import type { Metadata } from "next";
 import Providers from "@/components/Providers";
 import { geistMono, geistSans } from "@/lib/fonts";
