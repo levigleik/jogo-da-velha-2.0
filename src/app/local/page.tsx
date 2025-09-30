@@ -5,7 +5,7 @@ import UltimateTicTacToe from "../../components/ultimate-tic-tac-toe/UltimateTic
 
 export default function LocalMatchPage() {
   return (
-    <main className="min-h-screen p-8 flex flex-col items-center gap-6">
+    <main className="min-h-screen md:p-8 p-4 flex flex-col items-center gap-6">
       <div className="w-full max-w-5xl">
         <Link
           href="/"

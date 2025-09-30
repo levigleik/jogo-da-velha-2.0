@@ -215,7 +215,7 @@ export default function OnlineUTTTPage() {
 
   if (!state) {
     return (
-      <main className="min-h-screen p-6 flex flex-col items-center gap-6">
+      <main className="min-h-screen md:p-6 p-4 flex flex-col items-center gap-6">
         <div className="w-full max-w-sm self-start">
           <Link
             href="/"
@@ -276,7 +276,7 @@ export default function OnlineUTTTPage() {
             : `Vez do oponente (${state.nextPlayer})`;
 
   return (
-    <main className="min-h-screen p-6 flex flex-col items-center gap-6">
+    <main className="min-h-screen md:p-6 p-4 flex flex-col items-center gap-6">
       <div className="w-full max-w-4xl self-start">
         <Link
           href="/"

@@ -86,7 +86,7 @@ export default function UltimateTicTacToe() {
       </div>
 
       {/* Tabuleiro geral 3x3 */}
-      <div className="grid grid-cols-3 gap-3">
+      <div className="grid grid-cols-3 md:gap-3 gap-2">
         {POSITIONS.map((mb) => {
           const mini: MiniBoardState = state.boards[mb];
           const isAllowed = allowedBoards.includes(mb);
