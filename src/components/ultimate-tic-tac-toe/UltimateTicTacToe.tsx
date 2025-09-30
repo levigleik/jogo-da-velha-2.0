@@ -189,7 +189,7 @@ export default function UltimateTicTacToe() {
                         }}
                         className={[
                           "select-none flex items-center justify-center",
-                          "sm:h-16 sm:w-16 h-8 w-8 rounded-md border",
+                          "md:h-16 md:w-16 h-8 w-8 rounded-md border",
                           disabled
                             ? "border-neutral-300 dark:border-neutral-800"
                             : "border-neutral-300 dark:border-neutral-700 hover:bg-neutral-50 dark:hover:bg-neutral-800",

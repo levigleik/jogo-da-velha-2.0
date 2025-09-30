@@ -320,7 +320,7 @@ export default function OnlineUTTTPage() {
         </div>
       </div>
 
-      <div className="flex items-center gap-4 sm:flex-row flex-col">
+      <div className="flex items-center gap-4 md:flex-row flex-col">
         <div className="rounded border px-3 py-2 border-neutral-300 dark:border-neutral-700">
           Você: <span className="font-semibold">{me}</span>{" "}
           {role !== "spectator" ? `(${role})` : "(espectador)"}
@@ -448,7 +448,7 @@ export default function OnlineUTTTPage() {
                         }}
                         className={[
                           "select-none flex items-center justify-center",
-                          "sm:h-16 sm:w-16 h-8 w-8 rounded-md border",
+                          "md:h-16 md:w-16 h-8 w-8 rounded-md border",
                           disabled
                             ? "border-neutral-300 dark:border-neutral-800"
                             : "border-neutral-300 dark:border-neutral-700 hover:bg-neutral-50 dark:hover:bg-neutral-800",

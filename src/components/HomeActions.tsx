@@ -17,8 +17,8 @@ export default function HomeActions() {
 
   return (
     <section className="w-full max-w-3xl">
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-        <div className="rounded-xl border border-neutral-300 dark:border-neutral-700 p-5 bg-white dark:bg-neutral-900">
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <div className="text-center rounded-xl border border-neutral-300 dark:border-neutral-700 p-5 bg-white dark:bg-neutral-900">
           <h2 className="text-lg font-semibold mb-2">Partida local</h2>
           <p className="text-sm text-neutral-600 dark:text-neutral-300 mb-4">
             Jogue no mesmo dispositivo, alternando os turnos.
@@ -31,10 +31,11 @@ export default function HomeActions() {
           </Link>
         </div>
 
-        <div className="rounded-xl border border-neutral-300 dark:border-neutral-700 p-5 bg-white dark:bg-neutral-900">
+        <div className="text-center rounded-xl border border-neutral-300 dark:border-neutral-700 p-5 bg-white dark:bg-neutral-900">
           <h2 className="text-lg font-semibold mb-2">Partida online</h2>
           <p className="text-sm text-neutral-600 dark:text-neutral-300 mb-4">
-            Crie um link e compartilhe com um amigo. A partida começa quando ele entrar.
+            Crie um link e compartilhe com um amigo. A partida começa quando ele
+            entrar.
           </p>
           <button
             type="button"
